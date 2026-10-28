@@ -1,0 +1,144 @@
+diff --git a/sdk/BUILD.gn b/sdk/BUILD.gn
+index 8b08459819..2fa088b542 100644
+--- a/sdk/BUILD.gn
++++ b/sdk/BUILD.gn
+@@ -133,8 +133,6 @@ if (is_ios || is_mac) {
+ 
+   rtc_library("helpers_objc") {
+     sources = [
+-      "objc/helpers/AVCaptureSession+DevicePosition.h",
+-      "objc/helpers/AVCaptureSession+DevicePosition.mm",
+       "objc/helpers/NSString+StdString.h",
+       "objc/helpers/NSString+StdString.mm",
+       "objc/helpers/RTCDispatcher+Private.h",
+@@ -168,7 +166,8 @@ if (is_ios || is_mac) {
+         "objc/helpers/UIDevice+RTCDevice.mm",
+       ]
+ 
+-      if (target_platform != "tvos") {
++      # Audio-only build: no camera preview (it references AVCaptureSession).
++      if (false && target_platform != "tvos") {
+         sources += [
+           "objc/helpers/RTCCameraPreviewView.h",
+           "objc/helpers/RTCCameraPreviewView.m",
+@@ -1113,7 +1112,6 @@ if (is_ios || is_mac) {
+         ":videoframebuffer_objc",
+         ":videorendereradapter_objc",
+         ":videosource_objc",
+-        ":videotoolbox_objc",
+         "../api:create_modular_peer_connection_factory",
+         "../api:data_channel_interface",
+         "../api:dtmf_sender_interface",
+@@ -1351,22 +1349,8 @@ if (is_ios || is_mac) {
+           "objc/components/audio/RTCAudioDevice.h",
+           "objc/components/audio/RTCAudioSession.h",
+           "objc/components/audio/RTCAudioSessionConfiguration.h",
+-          "objc/components/capturer/RTCCameraVideoCapturer.h",
+-          "objc/components/capturer/RTCFileVideoCapturer.h",
+           "objc/components/network/RTCNetworkMonitor.h",
+-          "objc/components/renderer/metal/RTCMTLVideoView.h",
+-          "objc/components/renderer/opengl/RTCEAGLVideoView.h",
+-          "objc/components/renderer/opengl/RTCVideoViewShading.h",
+-          "objc/components/video_codec/RTCCodecSpecificInfoH264.h",
+-          "objc/components/video_codec/RTCDefaultVideoDecoderFactory.h",
+-          "objc/components/video_codec/RTCDefaultVideoEncoderFactory.h",
+-          "objc/components/video_codec/RTCH264ProfileLevelId.h",
+-          "objc/components/video_codec/RTCVideoDecoderFactoryH264.h",
+-          "objc/components/video_codec/RTCVideoDecoderH264.h",
+-          "objc/components/video_codec/RTCVideoEncoderFactoryH264.h",
+-          "objc/components/video_codec/RTCVideoEncoderH264.h",
+           "objc/components/video_frame_buffer/RTCCVPixelBuffer.h",
+-          "objc/helpers/RTCCameraPreviewView.h",
+           "objc/helpers/RTCDispatcher.h",
+           "objc/helpers/UIDevice+RTCDevice.h",
+           "objc/api/peerconnection/RTCAudioSource.h",
+@@ -1410,13 +1394,6 @@ if (is_ios || is_mac) {
+           "objc/api/peerconnection/RTCDtlsFingerprint.h",
+           "objc/api/peerconnection/RTCVideoSource.h",
+           "objc/api/peerconnection/RTCVideoTrack.h",
+-          "objc/api/video_codec/RTCVideoCodecConstants.h",
+-          "objc/api/video_codec/RTCVideoDecoderVP8.h",
+-          "objc/api/video_codec/RTCVideoDecoderVP9.h",
+-          "objc/api/video_codec/RTCVideoDecoderAV1.h",
+-          "objc/api/video_codec/RTCVideoEncoderVP8.h",
+-          "objc/api/video_codec/RTCVideoEncoderVP9.h",
+-          "objc/api/video_codec/RTCVideoEncoderAV1.h",
+           "objc/api/video_frame_buffer/RTCNativeI420Buffer.h",
+           "objc/api/video_frame_buffer/RTCNativeMutableI420Buffer.h",
+         ]
+@@ -1437,17 +1414,15 @@ if (is_ios || is_mac) {
+           "@rpath/$output_name.framework/$output_name",
+         ]
+ 
++        # Audio-only build (Diamond Tabletop): no camera capture, video codecs, VideoToolbox or Metal
++        # rendering. The camera capturer's AVCaptureDevice references are what App Store processing
++        # requires a camera purpose string for (ITMS-90683).
+         deps = [
+           ":audio_objc",
+           ":base_objc",
+-          ":default_codec_factory_objc",
+-          ":metal_objc",
+           ":native_api",
+           ":native_video",
+           ":peerconnectionfactory_base_objc",
+-          ":videocapture_objc",
+-          ":videocodec_objc",
+-          ":videotoolbox_objc",
+         ]
+         if (!build_with_chromium) {
+           deps += [
+diff --git a/sdk/objc/api/peerconnection/RTCPeerConnectionFactory.mm b/sdk/objc/api/peerconnection/RTCPeerConnectionFactory.mm
+index 2ea5393960..4467c9c7db 100644
+--- a/sdk/objc/api/peerconnection/RTCPeerConnectionFactory.mm
++++ b/sdk/objc/api/peerconnection/RTCPeerConnectionFactory.mm
+@@ -43,8 +43,6 @@
+ #include "api/media_stream_interface.h"
+ #include "api/rtc_event_log/rtc_event_log_factory.h"
+ #include "api/scoped_refptr.h"
+-#import "components/video_codec/RTCVideoDecoderFactoryH264.h"
+-#import "components/video_codec/RTCVideoEncoderFactoryH264.h"
+ #include "media/base/media_constants.h"
+ 
+ #include "sdk/objc/native/api/objc_audio_device_module.h"
+@@ -74,10 +72,8 @@ - (instancetype)init {
+       webrtc::CreateBuiltinAudioEncoderFactory();
+   dependencies.audio_decoder_factory =
+       webrtc::CreateBuiltinAudioDecoderFactory();
+-  dependencies.video_encoder_factory = webrtc::ObjCToNativeVideoEncoderFactory(
+-      [[RTC_OBJC_TYPE(RTCVideoEncoderFactoryH264) alloc] init]);
+-  dependencies.video_decoder_factory = webrtc::ObjCToNativeVideoDecoderFactory(
+-      [[RTC_OBJC_TYPE(RTCVideoDecoderFactoryH264) alloc] init]);
++  // Audio-only build (Diamond Tabletop): no video encoder or decoder factory, so the H.264 VideoToolbox
++  // codecs are not linked. Video tracks still negotiate, with no codecs to offer.
+   dependencies.env = webrtc::CreateEnvironment();
+ #ifdef WEBRTC_IOS
+   dependencies.adm = webrtc::CreateAudioDeviceModule(*dependencies.env);
+diff --git a/sdk/objc/api/peerconnection/RTCPeerConnectionFactoryBuilder+DefaultComponents.mm b/sdk/objc/api/peerconnection/RTCPeerConnectionFactoryBuilder+DefaultComponents.mm
+index 0bfad821df..d7d970ab28 100644
+--- a/sdk/objc/api/peerconnection/RTCPeerConnectionFactoryBuilder+DefaultComponents.mm
++++ b/sdk/objc/api/peerconnection/RTCPeerConnectionFactoryBuilder+DefaultComponents.mm
+@@ -13,8 +13,6 @@
+ 
+ #include "api/audio_codecs/builtin_audio_decoder_factory.h"
+ #include "api/audio_codecs/builtin_audio_encoder_factory.h"
+-#import "components/video_codec/RTCVideoDecoderFactoryH264.h"
+-#import "components/video_codec/RTCVideoEncoderFactoryH264.h"
+ #include "sdk/objc/native/api/video_decoder_factory.h"
+ #include "sdk/objc/native/api/video_encoder_factory.h"
+ 
+@@ -34,13 +32,8 @@ + (RTCPeerConnectionFactoryBuilder *)defaultBuilder {
+   auto audioDecoderFactory = webrtc::CreateBuiltinAudioDecoderFactory();
+   [builder setAudioDecoderFactory:audioDecoderFactory];
+ 
+-  auto videoEncoderFactory = webrtc::ObjCToNativeVideoEncoderFactory(
+-      [[RTC_OBJC_TYPE(RTCVideoEncoderFactoryH264) alloc] init]);
+-  [builder setVideoEncoderFactory:std::move(videoEncoderFactory)];
+-
+-  auto videoDecoderFactory = webrtc::ObjCToNativeVideoDecoderFactory(
+-      [[RTC_OBJC_TYPE(RTCVideoDecoderFactoryH264) alloc] init]);
+-  [builder setVideoDecoderFactory:std::move(videoDecoderFactory)];
++  // Audio-only build (Diamond Tabletop): no video encoder or decoder factory, as in
++  // RTCPeerConnectionFactory's default init.
+ 
+ #if defined(WEBRTC_IOS)
+   [builder setAudioDeviceModuleBuilder:^(const webrtc::Environment &env) {
