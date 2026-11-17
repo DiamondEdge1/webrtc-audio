@@ -49,12 +49,15 @@ build() {
 
   local out="$WORK/out"
   local aar="$out/webrtc-audio-android-$VERSION.aar"
-  rm -rf "$out"
+  # build_aar.py refuses a build directory outside the checkout ("--build-dir must be under …/src"), so the
+  # ninja tree lives under src/out while the AAR and its LICENSE.md land in $out, where CI collects them.
+  local build_dir="$WORK/src/out/audio-aar"
+  rm -rf "$out" "$build_dir"
   mkdir -p "$out"
   # build_aar.py's own GN args (release, no tests) plus protobuf off, as on iOS. Word-split on purpose.
   # shellcheck disable=SC2086
   python3 tools_webrtc/android/build_aar.py \
-    --build-dir "$out/build" \
+    --build-dir "$build_dir" \
     --output "$aar" \
     --arch $ARCHS \
     --extra-gn-args 'rtc_enable_protobuf=false' 'rtc_include_tests=false' 'treat_warnings_as_errors=false'
