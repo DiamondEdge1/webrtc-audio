@@ -1,0 +1,67 @@
+diff --git a/sdk/android/BUILD.gn b/sdk/android/BUILD.gn
+index 8858c05c30..ce072141b3 100644
+--- a/sdk/android/BUILD.gn
++++ b/sdk/android/BUILD.gn
+@@ -27,6 +27,9 @@ if (is_android) {
+   # Aggregate targets #
+   #####################
+ 
++  # Audio-only build (Diamond Tabletop): no camera, screen or file capture, no video renderers, and no
++  # video codecs, software (libvpx VP8/VP9, libaom AV1, dav1d) or MediaCodec. The video-track classes
++  # stay, with no codecs to offer, so the public API a voice app uses is unchanged.
+   dist_jar("libwebrtc") {
+     _target_dir_name = get_label_info(":$target_name", "dir")
+     output = "${root_out_dir}/lib.java${_target_dir_name}/${target_name}.jar"
+@@ -38,22 +41,12 @@ if (is_android) {
+       ":audio_api_java",
+       ":base_java",
+       ":builtin_audio_codecs_java",
+-      ":camera_java",
+-      ":default_video_codec_factory_java",
+       ":environment_java",
+-      ":filevideo_java",
+-      ":hwcodecs_java",
+       ":java_audio_device_module_java",
+-      ":libaom_av1_encoder_java",
+       ":libjingle_peerconnection_java",
+       ":libjingle_peerconnection_metrics_default_java",
+-      ":libvpx_vp8_java",
+-      ":libvpx_vp9_java",
+       ":logging_java",
+       ":peerconnection_java",
+-      ":screencapturer_java",
+-      ":surfaceviewrenderer_java",
+-      ":swcodecs_java",
+       ":video_api_java",
+       ":video_java",
+       "../../rtc_base:base_java",
+@@ -83,13 +76,8 @@ if (is_android) {
+     deps = [
+       ":audio_api_java",
+       ":base_java",
+-      ":camera_java",
+-      ":filevideo_java",
+-      ":hwcodecs_java",
+       ":java_audio_device_module_java",
+       ":peerconnection_java",
+-      ":screencapturer_java",
+-      ":surfaceviewrenderer_java",
+       ":video_api_java",
+       ":video_java",
+       "../../rtc_base:base_java",
+@@ -118,7 +106,6 @@ if (is_android) {
+     public_deps = [  # no-presubmit-check TODO(webrtc:8603)
+       ":base_jni",
+       ":builtin_audio_codecs_jni",
+-      ":default_video_codec_factory_jni",
+       ":environment_jni",
+       ":java_audio_device_module_jni",
+       ":peerconnection_jni",
+@@ -138,7 +125,6 @@ if (is_android) {
+     ]
+ 
+     deps = [
+-      ":dav1d_av1_jni",
+       ":internal_jni",
+       ":libjingle_peerconnection_jni",
+       ":libjingle_peerconnection_metrics_default_jni",

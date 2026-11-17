@@ -7,7 +7,7 @@ from the same WebRTC commit and patches.
 
 | Release | WebRTC | Contents |
 | --- | --- | --- |
-| `155.0.0-audio1` | M155, `branch-heads/8059` @ `5bd86a2f17a3` | `WebRTC-155.0.0-audio1.xcframework.zip` (iOS arm64 device + arm64 simulator) |
+| `155.0.0-audio1` | M155, `branch-heads/8059` @ `5bd86a2f17a3` | `WebRTC-155.0.0-audio1.xcframework.zip` (iOS arm64 device + arm64 simulator); `webrtc-audio-android-155.0.0-audio1.aar` (Android armeabi-v7a, arm64-v8a, x86, x86_64) |
 
 ## Why
 
@@ -25,6 +25,13 @@ not exist, `rtc_use_h264` is already false on iOS, and `rtc_build_libvpx=false` 
 externally". So `ios/audio-only.patch` removes those dependencies and leaves the factories' video codecs
 unset; the video-track classes stay, with no codecs to offer, so the public API is unchanged.
 
+Android has no App Store rule to trip, so there the reason is size and freshness: the maintained Android
+build (`io.github.webrtc-sdk:android`) stopped at M125, and it links libvpx (VP8/VP9), libaom (AV1) and
+dav1d into every ABI. `android/audio-only.patch` drops those, the camera/screen/file capturers, the video
+renderers and the MediaCodec factories from the AAR's two targets (`sdk/android:libwebrtc` and
+`:libjingle_peerconnection_so`). As on iOS the video-track classes stay, and a `PeerConnectionFactory`
+built without video factories offers no video codecs.
+
 ## Building iOS
 
 On a Mac with Xcode:
@@ -37,17 +44,33 @@ ios/build.sh build   # patch, build arm64 device + simulator, zip, print the SHA
 `WEBRTC_WORK` moves the checkout. The build mirrors stasel/WebRTC's `scripts/build.sh` at the same commit,
 minus the video-only GN args.
 
+## Building Android
+
+WebRTC's Android build needs a **Linux** host. On a Mac, run the **Android AAR** workflow
+(`.github/workflows/android.yml`, started by hand), which frees disk on a stock runner, syncs, builds every
+ABI and uploads the AAR as an artifact, and attaches it to a release when given the tag. On Linux:
+
+```sh
+WEBRTC_INSTALL_DEPS=1 android/build.sh sync   # once: depot_tools + the Android checkout (~30 GB)
+android/build.sh build                        # patch, build every ABI, assemble the AAR, print the SHA-256
+```
+
+The build fails if any `.so` still carries a video codec's name string or `classes.jar` still has the
+camera, renderer or default-codec classes. `WEBRTC_ARCHS` narrows the ABIs for a quicker local build.
+`BRANCH`, `COMMIT` and `VERSION` must match `ios/build.sh`: one release carries both platforms.
+
 ## Releasing
 
-Publish the zip as a release asset tagged with its version, and update the consuming app's fetch script
-with the new URL, version and SHA-256. Check first that the binary has no `AVCapture` references
-(`nm -u`, `strings`) and record its size.
+Publish the zip and the AAR as assets of one release tagged with their version, and update the consuming
+app: the iOS fetch script's URL, version and SHA-256, and the Android version and checksum in its
+Gradle version catalog and dependency-verification file. Check first that the iOS binary has no `AVCapture` references
+(`nm -u`, `strings`) and record both sizes.
 
 ## Bumping WebRTC
 
 1. Take the branch and commit stasel/WebRTC built the milestone from (their release notes name both) and set
-   `BRANCH`, `COMMIT` and `VERSION` in the build script.
-2. `sync`, then `build`. If the patch no longer applies, rebase it, keeping it to removals.
+   `BRANCH`, `COMMIT` and `VERSION` in both build scripts.
+2. `sync`, then `build`, for each platform. If a patch no longer applies, rebase it, keeping it to removals.
 3. Verify and release as above.
 
 Security fixes arrive the same way, so keeping current is this repo's job.
