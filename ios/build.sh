@@ -13,7 +13,7 @@ set -euo pipefail
 # stasel's 155.0.0 was built from this branch and commit; keep them together when bumping.
 BRANCH=${WEBRTC_BRANCH:-branch-heads/8059}
 COMMIT=${WEBRTC_COMMIT:-5bd86a2f17a35dfc986b87d058f511e45805bd1d}
-VERSION=${WEBRTC_AUDIO_VERSION:-155.0.0-audio1}
+VERSION=${WEBRTC_AUDIO_VERSION:-155.0.0-audio2}
 WORK=${WEBRTC_WORK:-$HOME/projects/webrtc-build}
 HERE=$(cd "$(dirname "$0")" && pwd)
 PHASE=${1:-all}

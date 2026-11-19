@@ -7,7 +7,8 @@ from the same WebRTC commit and patches.
 
 | Release | WebRTC | Contents |
 | --- | --- | --- |
-| `155.0.0-audio1` | M155, `branch-heads/8059` @ `5bd86a2f17a3` | `WebRTC-155.0.0-audio1.xcframework.zip` (iOS arm64 device + arm64 simulator); `webrtc-audio-android-155.0.0-audio1.aar` (Android armeabi-v7a, arm64-v8a, x86, x86_64) |
+| `155.0.0-audio2` | M155, `branch-heads/8059` @ `5bd86a2f17a3` | `WebRTC-155.0.0-audio2.xcframework.zip` (iOS arm64 device + arm64 simulator, the same framework as audio1); `webrtc-audio-android-155.0.0-audio2.aar` (Android armeabi-v7a, arm64-v8a, x86, x86_64) |
+| `155.0.0-audio1` | M155, `branch-heads/8059` @ `5bd86a2f17a3` | `WebRTC-155.0.0-audio1.xcframework.zip` (iOS); `webrtc-audio-android-155.0.0-audio1.aar` — **unusable**: its classes.jar lacks the JNI proxies and registration jni_zero generates, so the first native call throws. Fixed in audio2. |
 
 ## Why
 
@@ -31,6 +32,12 @@ dav1d into every ABI. `android/audio-only.patch` drops those, the camera/screen/
 renderers and the MediaCodec factories from the AAR's two targets (`sdk/android:libwebrtc` and
 `:libjingle_peerconnection_so`). As on iOS the video-track classes stay, and a `PeerConnectionFactory`
 built without video factories offers no video codecs.
+
+The patch also adds what `build_aar.py` leaves out at M155: the Java side of the native calls, which jni_zero
+generates into targets of their own (each class's `*Jni` proxy, and the `J.N` registration the shared
+library's natives are multiplexed through). Without them the first native call throws, which is what made
+audio1's AAR unusable. `android/build.sh` fails a build whose jar lacks any of them, and writes the AAR's
+consumer keep rules (`proguard.txt`): jni_zero's own, and every `org.webrtc` name, which `JNI_OnLoad` looks up.
 
 ## Building iOS
 

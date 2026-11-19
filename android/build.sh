@@ -14,7 +14,7 @@ set -euo pipefail
 # Keep these three equal to ios/build.sh's: one release carries both platforms' binaries.
 BRANCH=${WEBRTC_BRANCH:-branch-heads/8059}
 COMMIT=${WEBRTC_COMMIT:-5bd86a2f17a35dfc986b87d058f511e45805bd1d}
-VERSION=${WEBRTC_AUDIO_VERSION:-155.0.0-audio1}
+VERSION=${WEBRTC_AUDIO_VERSION:-155.0.0-audio2}
 # The ABIs io.github.webrtc-sdk:android ships, which is what the app linked before this build.
 ARCHS=${WEBRTC_ARCHS:-armeabi-v7a arm64-v8a x86 x86_64}
 WORK=${WEBRTC_WORK:-$HOME/webrtc-android}
@@ -61,9 +61,13 @@ build() {
     --output "$aar" \
     --arch $ARCHS \
     --extra-gn-args 'rtc_enable_protobuf=false' 'rtc_include_tests=false' 'treat_warnings_as_errors=false'
+  # Consumer keep rules, which build_aar.py doesn't write: jni_zero's own (native methods, @CalledByNative, the
+  # J.N hashes native code checks at load), and every org.webrtc name, which JNI_OnLoad looks up as it registers.
+  # An app that shrinks its release build would otherwise rename them and abort the first time voice starts.
+  { cat third_party/jni_zero/proguard.flags; echo '-keep class org.webrtc.** { *; }'; } > "$out/proguard.txt"
   # Licenses travel inside the AAR, as they do inside the iOS zip: WebRTC's own, and the third-party
   # notices build_aar.py generates beside its output for exactly what was linked.
-  zip -j -q "$aar" LICENSE PATENTS "$out/LICENSE.md"
+  zip -j -q "$aar" LICENSE PATENTS "$out/LICENSE.md" "$out/proguard.txt"
 
   verify "$aar"
   echo "built $aar"
@@ -86,10 +90,30 @@ verify() {
     fi
     echo "$(basename "$(dirname "$so")"): $(du -k "$so" | cut -f1) KB"
   done
-  if unzip -l "$tmp/classes.jar" | grep -q -E 'org/webrtc/(Camera|ScreenCapturer|SurfaceViewRenderer|Default.*VideoEncoderFactory)'; then
+  local classes
+  classes=$(unzip -Z1 "$tmp/classes.jar")
+  if echo "$classes" | grep -q -E 'org/webrtc/(Camera|ScreenCapturer|SurfaceViewRenderer|Default.*VideoEncoderFactory)'; then
     echo "video classes found in classes.jar" >&2
     exit 1
   fi
+  # And it must carry the Java side of its native calls, which jni_zero generates apart from the classes
+  # themselves and 155.0.0-audio1 shipped without: every org.webrtc class with a Natives interface needs its
+  # *Jni proxy, and the proxies need the registration they call through (J.N, or GEN_JNI without
+  # multiplexing). jni_zero's own two are left out: nothing in WebRTC calls them.
+  local natives missing=0
+  for natives in $(echo "$classes" | grep '^org/webrtc/.*\$Natives\.class$'); do
+    if ! echo "$classes" | grep -qxF "${natives%\$Natives.class}Jni.class"; then
+      echo "no JNI proxy for ${natives%.class}" >&2
+      missing=1
+    fi
+  done
+  if ! echo "$classes" | grep -q -x -E 'J/N\.class|org/jni_zero/GEN_JNI\.class'; then
+    echo "no JNI registration class (J.N or GEN_JNI) in classes.jar" >&2
+    missing=1
+  fi
+  [ "$missing" = 0 ] || exit 1
+  unzip -l "$aar" proguard.txt > /dev/null || { echo "no proguard.txt in the AAR" >&2; exit 1; }
+  echo "classes.jar: $(echo "$classes" | grep -c 'Jni\.class$') JNI proxies and their registration"
   rm -rf "$tmp"
 }
 
