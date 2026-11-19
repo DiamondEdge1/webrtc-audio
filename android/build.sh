@@ -98,8 +98,8 @@ verify() {
   fi
   # And it must carry the Java side of its native calls, which jni_zero generates apart from the classes
   # themselves and 155.0.0-audio1 shipped without: every org.webrtc class with a Natives interface needs its
-  # *Jni proxy, and the proxies need the registration they call through (J.N, or GEN_JNI without
-  # multiplexing). jni_zero's own two are left out: nothing in WebRTC calls them.
+  # *Jni proxy, and the proxies need the class they call the natives on (J.N with hashed names, GEN_JNI
+  # without). jni_zero's own two are left out: nothing in WebRTC calls them.
   local natives missing=0
   for natives in $(echo "$classes" | grep '^org/webrtc/.*\$Natives\.class$'); do
     if ! echo "$classes" | grep -qxF "${natives%\$Natives.class}Jni.class"; then
