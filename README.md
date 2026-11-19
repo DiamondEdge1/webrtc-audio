@@ -34,8 +34,9 @@ renderers and the MediaCodec factories from the AAR's two targets (`sdk/android:
 built without video factories offers no video codecs.
 
 The patch also adds what `build_aar.py` leaves out at M155: the Java side of the native calls, which jni_zero
-generates into targets of their own (each class's `*Jni` proxy, and the `J.N` class the proxies call the
-natives on, with hashed names). The video codecs' natives are gone, so stubs stand in for them there. Without them the first native call throws, which is what made
+generates into targets of their own (each class's `*Jni` proxy, and the `GEN_JNI` class the proxies call the
+natives on, compiled as a plain `java_library` because `android_library` strips it, leaving it to an APK). The
+video codecs' natives are gone, so stubs stand in for them there. Without them the first native call throws, which is what made
 audio1's AAR unusable. `android/build.sh` fails a build whose jar lacks any of them, and writes the AAR's
 consumer keep rules (`proguard.txt`): jni_zero's own, and every `org.webrtc` name, which `JNI_OnLoad` looks up.
 

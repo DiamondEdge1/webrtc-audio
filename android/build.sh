@@ -97,23 +97,34 @@ verify() {
     exit 1
   fi
   # And it must carry the Java side of its native calls, which jni_zero generates apart from the classes
-  # themselves and 155.0.0-audio1 shipped without: every org.webrtc class with a Natives interface needs its
-  # *Jni proxy, and the proxies need the class they call the natives on (J.N with hashed names, GEN_JNI
-  # without). jni_zero's own two are left out: nothing in WebRTC calls them.
-  local natives missing=0
+  # themselves and 155.0.0-audio1 shipped without. Every org.webrtc class with a Natives interface needs its
+  # *Jni proxy; every proxy needs its class (one whose class was removed fails R8 in the app); and the class
+  # the proxies call the natives on (GEN_JNI, or J.N with hashed names) must be there, whichever they name.
+  # jni_zero's own two proxies are left out: nothing in WebRTC calls them.
+  local natives proxy registration missing=0
   for natives in $(echo "$classes" | grep '^org/webrtc/.*\$Natives\.class$'); do
     if ! echo "$classes" | grep -qxF "${natives%\$Natives.class}Jni.class"; then
       echo "no JNI proxy for ${natives%.class}" >&2
       missing=1
     fi
   done
-  if ! echo "$classes" | grep -q -x -E 'J/N\.class|org/jni_zero/GEN_JNI\.class'; then
-    echo "no JNI registration class (J.N or GEN_JNI) in classes.jar" >&2
-    missing=1
-  fi
+  for proxy in $(echo "$classes" | grep '^org/webrtc/.*Jni\.class$'); do
+    if ! echo "$classes" | grep -qxF "${proxy%Jni.class}\$Natives.class"; then
+      echo "JNI proxy $proxy has no class to serve" >&2
+      missing=1
+    fi
+    for registration in org/jni_zero/GEN_JNI J/N; do
+      # A class file names the classes it uses as plain strings: J/N stands alone, between non-name bytes.
+      if unzip -p "$tmp/classes.jar" "$proxy" | LC_ALL=C grep -a -q -E "(^|[^A-Za-z0-9_/\$])$registration([^A-Za-z0-9_/\$]|\$)" &&
+        ! echo "$classes" | grep -qxF "$registration.class"; then
+        echo "$proxy calls $registration, which classes.jar lacks" >&2
+        missing=1
+      fi
+    done
+  done
   [ "$missing" = 0 ] || exit 1
   unzip -l "$aar" proguard.txt > /dev/null || { echo "no proguard.txt in the AAR" >&2; exit 1; }
-  echo "classes.jar: $(echo "$classes" | grep -c 'Jni\.class$') JNI proxies and their registration"
+  echo "classes.jar: $(echo "$classes" | grep -c 'Jni\.class$') JNI proxies, each with its class and the natives it calls"
   rm -rf "$tmp"
 }
 

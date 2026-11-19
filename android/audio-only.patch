@@ -1,5 +1,5 @@
 diff --git a/sdk/android/BUILD.gn b/sdk/android/BUILD.gn
-index 8858c05c30..da6df3c39c 100644
+index 8858c05c30..58a369017d 100644
 --- a/sdk/android/BUILD.gn
 +++ b/sdk/android/BUILD.gn
 @@ -27,6 +27,9 @@ if (is_android) {
@@ -12,7 +12,14 @@ index 8858c05c30..da6df3c39c 100644
    dist_jar("libwebrtc") {
      _target_dir_name = get_label_info(":$target_name", "dir")
      output = "${root_out_dir}/lib.java${_target_dir_name}/${target_name}.jar"
-@@ -38,29 +41,46 @@ if (is_android) {
+@@ -34,33 +37,55 @@ if (is_android) {
+     use_unprocessed_jars = true
+     requires_android = true
+ 
++    # NV12Buffer is in hwcodecs_java, removed above, but its proxy is generated with the video JNI kept below.
++    jar_excluded_patterns = [ "org/webrtc/NV12BufferJni*.class" ]
++
+     deps = [
        ":audio_api_java",
        ":base_java",
        ":builtin_audio_codecs_java",
@@ -38,9 +45,9 @@ index 8858c05c30..da6df3c39c 100644
        "../../third_party/jni_zero:jni_zero_java",
 +
 +      # The Java side of the native calls, which jni_zero generates into targets of their own, so a jar of
-+      # direct deps leaves it out: each library's *Jni proxies, and the class they call the natives on (J.N,
-+      # with hashed names). An APK compiles these in itself; an AAR must carry them, or the first native
-+      # call throws NoClassDefFoundError.
++      # direct deps leaves it out: each library's *Jni proxies, and the class they call the natives on
++      # (GEN_JNI). An APK compiles these in itself; an AAR must carry them, or the first native call throws
++      # NoClassDefFoundError.
 +      ":generated_audio_device_module_base_jni_java",
 +      ":generated_base_jni_java",
 +      ":generated_builtin_audio_codecs_jni_java",
@@ -59,9 +66,11 @@ index 8858c05c30..da6df3c39c 100644
      ]
    }
  
-+  # J.N for the AAR: the native declarations for everything libjingle_peerconnection_so exports, as an APK
-+  # would generate them for it.
-+  rtc_android_library("libjingle_peerconnection_so_jni_registration_java") {
++  # GEN_JNI for the AAR: the native declarations for everything libjingle_peerconnection_so exports, as an APK
++  # would generate them for it. A java_library, not an android_library: that strips */*GEN_JNI.class from
++  # anything with a JNI srcjar, leaving it to the APK, and an AAR has no APK step of its own.
++  java_library("libjingle_peerconnection_so_jni_registration_java") {
++    supports_android = true
 +    srcjar_deps = [ ":libjingle_peerconnection_so__jni_registration" ]
 +    deps = [ "//third_party/jni_zero:jni_zero_java" ]
 +  }
@@ -69,7 +78,7 @@ index 8858c05c30..da6df3c39c 100644
    # The native API is currently experimental and may change without notice.
    group("native_api") {
      deps = [
-@@ -83,13 +103,8 @@ if (is_android) {
+@@ -83,13 +108,8 @@ if (is_android) {
      deps = [
        ":audio_api_java",
        ":base_java",
@@ -83,7 +92,7 @@ index 8858c05c30..da6df3c39c 100644
        ":video_api_java",
        ":video_java",
        "../../rtc_base:base_java",
-@@ -118,7 +133,6 @@ if (is_android) {
+@@ -118,7 +138,6 @@ if (is_android) {
      public_deps = [  # no-presubmit-check TODO(webrtc:8603)
        ":base_jni",
        ":builtin_audio_codecs_jni",
@@ -91,7 +100,7 @@ index 8858c05c30..da6df3c39c 100644
        ":environment_jni",
        ":java_audio_device_module_jni",
        ":peerconnection_jni",
-@@ -130,6 +144,10 @@ if (is_android) {
+@@ -130,6 +149,10 @@ if (is_android) {
    rtc_shared_library("libjingle_peerconnection_so") {
      sources = [ "src/jni/jni_onload.cc" ]
  
@@ -102,7 +111,7 @@ index 8858c05c30..da6df3c39c 100644
      suppressed_configs += [ "//build/config/android:hide_all_but_jni_onload" ]
      configs += [ "//build/config/android:hide_all_but_jni" ]
      ldflags = [
-@@ -138,7 +156,6 @@ if (is_android) {
+@@ -138,7 +161,6 @@ if (is_android) {
      ]
  
      deps = [
